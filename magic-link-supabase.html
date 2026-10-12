@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Magic Link Login</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--card:#131b2e;--line:#26334e;--text:#f3f6ff;--muted:#a9b5cc;--accent:#8b9cff;--ok:#65d6a5;--err:#ff9292}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:radial-gradient(ellipse at top,#1a2850 0,#0b1020 58%);font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:var(--text)}.card{width:min(100%,430px);background:rgba(19,27,46,.96);border:1px solid var(--line);border-radius:24px;padding:28px;box-shadow:0 22px 80px #0006}.logo{width:52px;height:52px;display:grid;place-items:center;background:#26345d;border-radius:16px;font-size:25px;margin-bottom:18px}h1{font-size:27px;line-height:1.15;margin:0 0 9px}p{color:var(--muted);line-height:1.55;margin:0 0 22px}.label{display:block;font-size:14px;margin:0 0 8px;color:#dce4fa}input{width:100%;padding:14px 15px;background:#0b1224;border:1px solid #34425f;border-radius:12px;color:white;font-size:16px;outline:none}input:focus{border-color:var(--accent);box-shadow:0 0 0 3px #8b9cff25}button{width:100%;border:0;border-radius:12px;padding:14px 16px;font-size:15px;font-weight:700;cursor:pointer;margin-top:13px;background:var(--accent);color:#0a1024}button:disabled{opacity:.55;cursor:wait}.secondary{background:#202c46;color:#edf1ff}.status{display:none;margin-top:16px;border-radius:12px;padding:12px 13px;font-size:14px;line-height:1.45;overflow-wrap:anywhere}.status.show{display:block}.status.ok{background:#12352e;color:#a8f4d2}.status.err{background:#421f2b;color:#ffc1c1}.tiny{font-size:12px;color:#8290aa;margin:18px 0 0}.hidden{display:none!important}.email{font-weight:700;color:#fff;overflow-wrap:anywhere}.pill{display:inline-block;border:1px solid #3c4c70;border-radius:999px;padding:5px 10px;font-size:12px;color:#c6d1ff;margin-bottom:14px}
+</style>
+</head>
+<body>
+<main class="card">
+ <div class="logo">✉️</div>
+ <div class="pill">LOGIN TANPA PASSWORD</div>
+ <section id="loginView">
+  <h1>Masuk dengan Magic Link</h1>
+  <p>Masukkan email kamu. Kami akan mengirim tautan aman untuk masuk—tanpa perlu kata sandi.</p>
+  <form id="loginForm">
+   <label class="label" for="email">Alamat email</label>
+   <input id="email" type="email" autocomplete="email" placeholder="kamu@email.com" required>
+   <button id="sendBtn" type="submit">Kirim tautan login</button>
+  </form>
+  <div id="loginStatus" class="status" role="status" aria-live="polite"></div>
+ </section>
+ <section id="dashboardView" class="hidden">
+  <h1>Kamu berhasil masuk 🎉</h1>
+  <p>Sesi login aktif untuk akun:</p>
+  <p class="email" id="userEmail"></p>
+  <p>Halaman ini sudah terhubung dengan Supabase Auth. Kamu bisa mengembangkan dashboard ini sesuai kebutuhan.</p>
+  <button id="logoutBtn" class="secondary" type="button">Keluar / Logout</button>
+  <div id="dashStatus" class="status" role="status" aria-live="polite"></div>
+ </section>
+ <p class="tiny">Login aman melalui Supabase. Jangan pernah membagikan tautan login kepada orang lain.</p>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// LANGKAH SETUP: ganti dua nilai di bawah dengan Project URL dan anon/public key dari Supabase.
+// Jangan pernah memasukkan service_role key ke dalam file HTML.
+const SUPABASE_URL = 'https://prqdfmpglefcanvswcuq.supabase.com';
+const SUPABASE_ANON_KEY = 'sb_publishable_DCpZsDpIbEgy9mVqPFv5ww_Uj9mdaRI';
+
+const $ = (id) => document.getElementById(id);
+const loginView = $('loginView'), dashboardView = $('dashboardView');
+let client = null;
+function status(id, message, kind='ok') { const el=$(id); el.textContent=message; el.className='status show '+kind; }
+function clearStatus(id){const el=$(id);el.textContent='';el.className='status';}
+function configured(){return SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('MASUKKAN_') && SUPABASE_ANON_KEY.length>20 && !SUPABASE_ANON_KEY.includes('MASUKKAN_');}
+function showUser(user){loginView.classList.add('hidden');dashboardView.classList.remove('hidden');$('userEmail').textContent=user?.email||'Email tidak tersedia';}
+function showLogin(){dashboardView.classList.add('hidden');loginView.classList.remove('hidden');}
+async function init(){
+ if(!configured()){status('loginStatus','Setup belum selesai. Buka file ini di Acode, lalu isi SUPABASE_URL dan SUPABASE_ANON_KEY dari dashboard Supabase. Setelah itu upload ke website HTTPS.','err');$('sendBtn').disabled=true;return;}
+ if(!window.supabase){status('loginStatus','Library login tidak berhasil dimuat. Periksa koneksi internet lalu muat ulang halaman.','err');return;}
+ client=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+ const {data:{session},error}=await client.auth.getSession();
+ if(error){status('loginStatus','Gagal memeriksa sesi: '+error.message,'err');return;}
+ if(session?.user)showUser(session.user);
+ client.auth.onAuthStateChange((_event,newSession)=>{if(newSession?.user)showUser(newSession.user);else showLogin();});
+}
+$('loginForm').addEventListener('submit',async(e)=>{
+ e.preventDefault();clearStatus('loginStatus');
+ if(!client){status('loginStatus','Supabase belum dikonfigurasi. Isi URL dan anon key terlebih dahulu.','err');return;}
+ const email=$('email').value.trim();if(!email)return;
+ const btn=$('sendBtn');btn.disabled=true;btn.textContent='Mengirim…';
+ try{
+  const redirectTo=window.location.href.split('#')[0].split('?')[0];
+  const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:redirectTo,shouldCreateUser:true}});
+  if(error)throw error;
+  status('loginStatus','Jika alamat email valid, tautan login sudah diminta untuk dikirim. Periksa inbox dan folder spam. Buka tautan di perangkat/browser yang sama dengan website ini.','ok');
+ }catch(err){status('loginStatus','Tidak bisa mengirim tautan: '+(err?.message||'Kesalahan tidak diketahui')+'. Periksa konfigurasi Supabase dan pengaturan email.','err');}
+ finally{btn.disabled=false;btn.textContent='Kirim tautan login';}
+});
+$('logoutBtn').addEventListener('click',async()=>{if(!client)return;const btn=$('logoutBtn');btn.disabled=true;try{const {error}=await client.auth.signOut();if(error)throw error;showLogin();status('loginStatus','Kamu sudah logout.','ok');}catch(err){status('dashStatus','Logout gagal: '+(err?.message||'Kesalahan tidak diketahui'),'err');}finally{btn.disabled=false;}});
+init();
+</script>
+</body>
+</html>
